@@ -117,7 +117,8 @@
       "Bash(fi)",
       "Bash(diff:*)",
       "WebFetch(domain:google.github.io)",
-      "Bash(crawl4ai-setup)"
+      "Bash(crawl4ai-setup)",
+      "Bash(./install_pdf_dependencies.sh:*)"
     ],
     "deny": []
   },
