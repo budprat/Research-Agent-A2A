@@ -35,11 +35,17 @@ except ImportError as e:
 logger = get_logger(__name__)
 
 # Database configurations
-SOLOPRENEUR_DB = os.getenv('SOLOPRENEUR_DB', 'solopreneur.db')
-TRAVEL_DB = os.getenv('TRAVEL_DB', 'travel_agency.db')
-NEO4J_URI = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
-NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
+# SQLite databases - use data directory for better organization
+SOLOPRENEUR_DB = os.getenv('SOLOPRENEUR_DB', './data/solopreneur.db')
+TRAVEL_DB = os.getenv('TRAVEL_DB', './data/travel_agency.db')
+
+# Neo4j configuration - require explicit setup via environment variables
+# These should be set in .env file - no defaults for security
+NEO4J_URI = os.getenv('NEO4J_URI')
+NEO4J_USER = os.getenv('NEO4J_USER')
+NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD')
+
+# GitHub integration (optional)
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')
 
 
