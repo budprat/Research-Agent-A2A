@@ -25,9 +25,9 @@ logger = get_logger(__name__)
 # Configuration constants
 AGENT_CARDS_DIR = os.getenv('AGENT_CARDS_DIR', 'agent_cards')
 EMBEDDING_MODEL = 'models/embedding-001'
-SYSTEM_DB = os.getenv('SYSTEM_DB', 'system.db')
+SYSTEM_DB = os.getenv('SYSTEM_DB', './data/system.db')
 PLACES_API_URL = 'https://places.googleapis.com/v1/places:searchText'
-SQLLITE_DB = os.getenv('SQLLITE_DB', 'travel.db')
+SQLLITE_DB = os.getenv('SQLLITE_DB', './data/travel.db')
 
 # Agent card management
 agent_embeddings_df = None

@@ -55,24 +55,35 @@ The A2A MCP Framework provides a structured approach to building collaborative A
 ### Prerequisites
 - Python 3.9+
 - Git
+- Google AI API Key (get one at https://makersuite.google.com/app/apikey)
 
 ### Installation
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone <repository-url>
 cd agentic-framework-boilerplate
 
-# Run the setup script
+# 2. Set up environment variables (REQUIRED)
+cp configs/.env.template .env
+
+# 3. Edit .env and add your Google API key
+# Open .env in your editor and set:
+# GOOGLE_API_KEY=your_actual_api_key_here
+
+# 4. Run the setup script
 ./start.sh
 ```
 
 The setup script will:
 - Create a virtual environment
 - Install all dependencies
-- Set up necessary directories
+- Set up necessary directories (including `./data/` for databases)
+- Validate environment configuration
 - Start the MCP server
 - Launch example agents
+
+**⚠️ Important:** The framework will **not start** without a valid `GOOGLE_API_KEY` set in your `.env` file. This is a security feature to prevent running with default/insecure configurations.
 
 ### Basic Usage
 
@@ -110,23 +121,93 @@ agentic-framework-boilerplate/
 
 ## 🔧 Configuration
 
-1. Copy `.env.template` to `.env`:
+### Environment Setup
+
+1. **Copy the environment template**:
 ```bash
-cp .env.template .env
+cp configs/.env.template .env
 ```
 
-2. Update the configuration values as needed:
+2. **Configure required API keys**:
 ```env
-# Logging level
-A2A_LOG_LEVEL=INFO
+# REQUIRED: Google AI API Key for agent models
+GOOGLE_API_KEY=your_actual_google_api_key_here
 
-# MCP Server settings
-MCP_SERVER_HOST=localhost
-MCP_SERVER_PORT=10100
-
-# Add your API keys if needed
-# OPENAI_API_KEY=your_key_here
+# Optional: Additional AI providers
+OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
 ```
+
+3. **Configure Google Cloud (if using Vertex AI features)**:
+```env
+# Google Cloud Configuration
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+VERTEX_AI_AGENT_ENGINE_ID=your-agent-engine-id
+```
+
+4. **Configure databases (if using database features)**:
+```env
+# SQLite databases (automatically created in ./data/)
+SQLLITE_DB=./data/travel.db
+SOLOPRENEUR_DB=./data/solopreneur.db
+TRAVEL_DB=./data/travel_agency.db
+
+# Neo4j Graph Database (if using graph features)
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_secure_password_here
+
+# Supabase (if using Supabase features)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+5. **MCP Server settings** (optional, defaults provided):
+```env
+MCP_HOST=localhost
+MCP_PORT=8080
+MCP_TRANSPORT=stdio
+```
+
+### 🔒 Security Best Practices
+
+**⚠️ IMPORTANT: Never commit secrets to version control!**
+
+The framework follows security best practices:
+
+1. **No Hardcoded Secrets**: All sensitive credentials must be provided via environment variables
+2. **Secure Defaults**: Database files are stored in `./data/` directory (add to `.gitignore`)
+3. **Mandatory Credentials**: Critical services like Neo4j require explicit configuration - no default passwords
+4. **Environment Validation**: The framework validates required environment variables at startup
+
+**What We've Secured:**
+- ✅ Removed all hardcoded database passwords
+- ✅ Removed default credentials for Neo4j and other services
+- ✅ Centralized all database paths to `./data/` directory
+- ✅ Required explicit configuration for all sensitive services
+- ✅ Provided comprehensive `.env.template` with clear documentation
+
+**Before Running in Production:**
+- [ ] Set strong, unique passwords for all database services
+- [ ] Use environment-specific `.env` files (never commit them)
+- [ ] Enable encryption for sensitive data at rest
+- [ ] Implement API rate limiting and authentication
+- [ ] Use secrets management services (AWS Secrets Manager, GCP Secret Manager, etc.)
+- [ ] Review and update `DATA_RETENTION_DAYS` and privacy settings
+
+### Environment Variables Reference
+
+For a complete list of all available environment variables, see `configs/.env.template`. Key categories:
+
+- **API Keys & Authentication**: AI provider keys, GitHub tokens
+- **Google Cloud Configuration**: Project ID, location, Vertex AI settings
+- **MCP Server**: Host, port, transport settings
+- **Agent Configuration**: Model settings, temperature, memory configuration
+- **Database Configuration**: SQLite paths, Neo4j, Supabase credentials
+- **Security & Privacy**: Encryption, data retention, GDPR compliance
+- **Monitoring & Observability**: Telemetry, metrics, health checks
+- **Development & Testing**: Debug mode, testing flags, feature flags
 
 ## 🧪 Testing
 
@@ -289,6 +370,65 @@ To gracefully shut down all agents and the MCP server:
 ```bash
 ./stop.sh
 ```
+
+## 🔐 Security & Data Privacy
+
+### Credentials Management
+
+The framework requires explicit configuration for all sensitive services. **No default passwords or credentials are provided** to ensure security by default.
+
+**Critical Security Features:**
+- 🔒 **Zero Hardcoded Secrets**: All credentials must be provided via environment variables
+- 🔑 **No Default Passwords**: Services like Neo4j require explicit password configuration
+- 📁 **Isolated Data Directory**: All databases stored in `./data/` (excluded from version control)
+- ✅ **Environment Validation**: Startup checks verify required credentials are set
+- 🛡️ **Secure by Default**: Framework fails fast if critical credentials are missing
+
+### Data Privacy Controls
+
+Configure privacy settings in your `.env` file:
+
+```env
+# Data Privacy Settings
+ANONYMIZE_USER_DATA=true           # Anonymize personally identifiable information
+DATA_RETENTION_DAYS=90             # Automatic data cleanup after 90 days
+GDPR_COMPLIANCE_MODE=false         # Enable GDPR compliance features
+ENCRYPT_SENSITIVE_DATA=true        # Encrypt sensitive data at rest
+ENCRYPTION_KEY=your_32_char_key    # Encryption key for sensitive data
+```
+
+### API Security
+
+Enable rate limiting and authentication:
+
+```env
+# API Security
+API_RATE_LIMIT_ENABLED=true
+API_RATE_LIMIT_REQUESTS=100        # Max requests per window
+API_RATE_LIMIT_WINDOW=3600         # Window size in seconds (1 hour)
+```
+
+### Production Security Checklist
+
+Before deploying to production:
+
+- [ ] **Rotate all API keys** and use production-grade credentials
+- [ ] **Enable TLS/SSL** for all network communications
+- [ ] **Set up secrets management** (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault)
+- [ ] **Configure firewall rules** to restrict access to agent ports
+- [ ] **Enable audit logging** for all sensitive operations
+- [ ] **Review data retention policies** and configure appropriately
+- [ ] **Implement backup strategies** for critical data
+- [ ] **Set up monitoring alerts** for security events
+- [ ] **Regular security audits** and dependency updates
+- [ ] **Configure CORS policies** if exposing HTTP endpoints
+
+### Reporting Security Issues
+
+If you discover a security vulnerability, please report it responsibly:
+- Do NOT open a public issue
+- Email security details to [security contact - to be added]
+- Allow time for patching before public disclosure
 
 ## 🤝 Contributing
 
