@@ -29,6 +29,7 @@ class AgentConfig:
     model: str = "gemini-2.0-flash"
     mcp_tools_enabled: bool = True
     a2a_enabled: bool = True
+    memory: Optional[Dict[str, Any]] = None  # Memory configuration
     custom_settings: Dict[str, Any] = field(default_factory=dict)
 
 
