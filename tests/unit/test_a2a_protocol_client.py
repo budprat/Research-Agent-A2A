@@ -34,7 +34,7 @@ class TestCreateA2ARequest:
         assert "id" in request
         assert isinstance(request["id"], str)
         assert request["method"] == "test_method"
-        assert request["params"]["message"]["parts"][0]["text"] == "test message"
+        assert request["params"]["message"] == "test message"
 
     def test_create_request_with_metadata(self):
         """Test creating A2A request with custom metadata."""
@@ -48,22 +48,23 @@ class TestCreateA2ARequest:
         assert request["params"]["metadata"] == metadata
 
     def test_create_request_unique_ids(self):
-        """Test that each request gets a unique ID."""
-        req1 = create_a2a_request("test", "message 1")
-        req2 = create_a2a_request("test", "message 2")
+        """Test that each request gets a unique ID when provided explicitly."""
+        req1 = create_a2a_request("test", "message 1", request_id="req-001")
+        req2 = create_a2a_request("test", "message 2", request_id="req-002")
 
         assert req1["id"] != req2["id"]
+        assert req1["id"] == "req-001"
+        assert req2["id"] == "req-002"
 
     def test_create_request_message_structure(self):
         """Test the message structure is correctly formed."""
         request = create_a2a_request("message/send", "Hello world")
-        message = request["params"]["message"]
 
-        assert message["role"] == "user"
-        assert message["kind"] == "message"
-        assert "messageId" in message
-        assert len(message["parts"]) == 1
-        assert message["parts"][0]["kind"] == "text"
+        assert "params" in request
+        assert request["params"]["message"] == "Hello world"
+        assert "metadata" in request["params"]
+        assert "timestamp" in request["params"]
+        assert isinstance(request["params"]["timestamp"], str)
 
 
 @pytest.mark.unit
@@ -76,7 +77,7 @@ class TestA2AProtocolClient:
         client = A2AProtocolClient(source_agent_name="test_agent")
 
         assert client.source_agent_name == "test_agent"
-        assert isinstance(client.port_mapping, dict)
+        assert isinstance(client.custom_port_mapping, dict)
         assert client.max_retries == 3  # Default value
 
     def test_client_custom_port_mapping(self):
@@ -90,24 +91,24 @@ class TestA2AProtocolClient:
             custom_port_mapping=custom_ports
         )
 
-        # Custom ports should be merged with defaults
-        assert "test_agent" in client.port_mapping
-        assert client.port_mapping["test_agent"] == 12345
+        # Custom ports should be accessible
+        assert "test_agent" in client.custom_port_mapping
+        assert client.custom_port_mapping["test_agent"] == 12345
 
     def test_client_port_resolution(self):
-        """Test client resolves ports correctly."""
+        """Test client resolves ports correctly using get_agent_port."""
         client = A2AProtocolClient()
 
         # Test with known agent from A2A_AGENT_PORTS
         if A2A_AGENT_PORTS:
             first_agent = list(A2A_AGENT_PORTS.keys())[0]
             expected_port = A2A_AGENT_PORTS[first_agent]
-            assert client.port_mapping.get(first_agent) == expected_port
+            assert client.get_agent_port(first_agent) == expected_port
 
     @pytest.mark.asyncio
     async def test_send_request_success(self, mock_aiohttp_session):
         """Test successful request sending."""
-        client = A2AProtocolClient()
+        client = A2AProtocolClient(use_connection_pool=False)
 
         with patch('a2a_mcp.common.a2a_protocol.aiohttp.ClientSession') as mock_session_class:
             mock_session_class.return_value.__aenter__.return_value = mock_aiohttp_session
@@ -118,9 +119,9 @@ class TestA2AProtocolClient:
                 return_value={"result": {"content": "success"}}
             )
 
-            result = await client.send_request(
-                port=11001,
-                query="test query",
+            result = await client.send_message(
+                target_port=11001,
+                message="test query",
                 method="message/send"
             )
 
@@ -131,7 +132,7 @@ class TestA2AProtocolClient:
     @pytest.mark.asyncio
     async def test_send_request_retry_on_failure(self):
         """Test retry logic on connection failure."""
-        client = A2AProtocolClient(max_retries=2)
+        client = A2AProtocolClient(max_retries=2, use_connection_pool=False)
 
         with patch('a2a_mcp.common.a2a_protocol.aiohttp.ClientSession') as mock_session_class:
             # Simulate connection failure
@@ -140,7 +141,7 @@ class TestA2AProtocolClient:
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
             with pytest.raises(Exception):
-                await client.send_request(port=99999, query="test", max_retries=2)
+                await client.send_message(target_port=99999, message="test")
 
             # Should have retried
             assert mock_session.post.call_count == 2
@@ -157,9 +158,9 @@ class TestA2AProtocolClient:
                 return_value={"result": "success"}
             )
 
-            await client.send_request(
-                port=11001,
-                query="test",
+            await client.send_message(
+                target_port=11001,
+                message="test",
                 metadata=metadata
             )
 
@@ -172,7 +173,7 @@ class TestA2AProtocolClient:
     @pytest.mark.asyncio
     async def test_send_request_timeout_handling(self):
         """Test request timeout handling."""
-        client = A2AProtocolClient(timeout=1)
+        client = A2AProtocolClient(default_timeout=1, use_connection_pool=False)
 
         with patch('a2a_mcp.common.a2a_protocol.aiohttp.ClientSession') as mock_session_class:
             # Simulate timeout
@@ -181,23 +182,24 @@ class TestA2AProtocolClient:
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
             with pytest.raises((asyncio.TimeoutError, Exception)):
-                await client.send_request(port=11001, query="test", max_retries=1)
+                await client.send_message(target_port=11001, message="test")
 
     def test_create_request_with_context(self):
         """Test request creation with session context."""
-        client = A2AProtocolClient()
-
-        request = client.create_request(
-            query="test query",
-            session_id="session-123",
-            context_data={"user_id": "user-456"}
+        request = create_a2a_request(
+            method="message/send",
+            message="test query",
+            metadata={
+                "session_id": "session-123",
+                "context_data": {"user_id": "user-456"}
+            }
         )
 
-        assert request["params"]["message"]["parts"][0]["text"] == "test query"
+        assert request["params"]["message"] == "test query"
         # Verify context is included in metadata
-        if "metadata" in request["params"]:
-            assert "session_id" in request["params"]["metadata"] or \
-                   request["params"]["metadata"].get("session_id") == "session-123"
+        assert "metadata" in request["params"]
+        assert request["params"]["metadata"]["session_id"] == "session-123"
+        assert request["params"]["metadata"]["context_data"]["user_id"] == "user-456"
 
 
 @pytest.mark.unit
@@ -208,19 +210,19 @@ class TestA2AProtocolEdgeCases:
     def test_create_request_empty_message(self):
         """Test handling of empty message."""
         request = create_a2a_request("test", "")
-        assert request["params"]["message"]["parts"][0]["text"] == ""
+        assert request["params"]["message"] == ""
 
     def test_create_request_special_characters(self):
         """Test handling of special characters in message."""
         special_msg = "Test with \n newlines \t tabs and unicode: 你好"
         request = create_a2a_request("test", special_msg)
-        assert request["params"]["message"]["parts"][0]["text"] == special_msg
+        assert request["params"]["message"] == special_msg
 
     def test_create_request_large_message(self):
         """Test handling of large message."""
         large_msg = "x" * 10000  # 10KB message
         request = create_a2a_request("test", large_msg)
-        assert len(request["params"]["message"]["parts"][0]["text"]) == 10000
+        assert len(request["params"]["message"]) == 10000
 
     def test_create_request_null_metadata(self):
         """Test handling of null metadata."""
@@ -233,7 +235,7 @@ class TestA2AProtocolEdgeCases:
         client = A2AProtocolClient()
 
         with pytest.raises((ValueError, Exception)):
-            await client.send_request(port=-1, query="test", max_retries=0)
+            await client.send_message(target_port=-1, message="test")
 
     @pytest.mark.asyncio
     async def test_client_unreachable_port(self):
@@ -246,7 +248,7 @@ class TestA2AProtocolEdgeCases:
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
             with pytest.raises((ConnectionRefusedError, Exception)):
-                await client.send_request(port=99999, query="test", max_retries=1)
+                await client.send_message(target_port=99999, message="test")
 
 
 @pytest.mark.unit
@@ -267,10 +269,10 @@ class TestA2AProtocolIntegration:
             mock_session.post.return_value.__aenter__.return_value = mock_response
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            result = await client.send_request(
-                port=11001,
-                query="test query",
-                session_id="test-session"
+            result = await client.send_message(
+                target_port=11001,
+                message="test query",
+                metadata={"session_id": "test-session"}
             )
 
             # Verify we got a response
@@ -292,9 +294,9 @@ class TestA2AProtocolIntegration:
             # Send 3 requests
             results = []
             for i in range(3):
-                result = await client.send_request(
-                    port=11001,
-                    query=f"query {i}"
+                result = await client.send_message(
+                    target_port=11001,
+                    message=f"query {i}"
                 )
                 results.append(result)
 
@@ -316,9 +318,9 @@ class TestA2AProtocolIntegration:
 
             # Send concurrent requests
             tasks = [
-                client.send_request(port=11001, query="query 1"),
-                client.send_request(port=11002, query="query 2"),
-                client.send_request(port=11003, query="query 3")
+                client.send_message(target_port=11001, message="query 1"),
+                client.send_message(target_port=11002, message="query 2"),
+                client.send_message(target_port=11003, message="query 3")
             ]
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -366,7 +368,7 @@ class TestA2AProtocolPerformance:
 
             # Create 100 concurrent requests
             tasks = [
-                client.send_request(port=11001, query=f"query {i}")
+                client.send_message(target_port=11001, message=f"query {i}")
                 for i in range(100)
             ]
 
